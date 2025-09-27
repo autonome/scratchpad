@@ -18,11 +18,11 @@ const createTodo = (text) => ({
 
 // State machine for application flow
 const appFSM = new StateMachine({
-  initial: 'idle',
+  initial: 'viewing',
   states: {
-    idle: ['adding', 'filtering'],
-    adding: ['idle'],
-    filtering: ['idle']
+    viewing: ['adding', 'filtering'],
+    adding: ['viewing'],
+    filtering: ['viewing']
   }
 });
 
@@ -77,10 +77,12 @@ effect(() => {
 // FSM event handlers - coordinate state changes
 appFSM.on('adding', async () => {
   actions.addTodo(appState.inputText.value);
+  await appFSM.go('viewing');
 });
 
 appFSM.on('filtering', async (prev, filter) => {
   actions.setFilter(filter);
+  await appFSM.go('viewing');
 });
 
 // Components - pure UI functions
@@ -88,7 +90,6 @@ const TodoInput = () => {
   const handleKeyPress = async (e) => {
     if (e.key === 'Enter' && appState.inputText.value.trim()) {
       await appFSM.go('adding');
-      await appFSM.go('idle');
     }
   };
 
@@ -109,7 +110,6 @@ const TodoInput = () => {
 const FilterButton = ({ filter, label }) => {
   const handleClick = async () => {
     await appFSM.go('filtering', filter);
-    await appFSM.go('idle');
   };
 
   return html`
