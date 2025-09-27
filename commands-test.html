@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html itemscope itemtype="http://schema.org/Webpage">
+<head>
+  <meta charset="utf-8">
+
+  <!-- Place this data between the <head> tags of your website -->
+  <title>Eventmarklet</title>
+  <meta name="description" content="Quickly add events to a shared spreadsheet." />
+
+  <style>   
+    html, body {
+      height: 100%; 
+      padding: 0;
+      margin: 0;
+    }
+
+    .container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @media screen and (max-width: 500px) {
+      /*
+      div#masonry { height: 200vw; }
+      div#masonry img { width: 50%; }
+      */
+    }
+
+  </style>   
+</head>
+<body>
+
+  <div class="container">
+
+    <div id="clickme">click me</div>
+
+  </div>
+
+<script>
+
+  function style(el, styles) {
+    var str = Object.keys(styles).map(function(key) {
+      return [key, ':', styles[key], ';'].join('');
+    }).join('');
+    el.setAttribute('style', str);
+  }
+
+  document.querySelector('#clickme').addEventListener('click', function() {
+    var container = document.createElement('div');
+    style(container, {
+      border: '1px solid silver',
+      'z-index': 999999,
+      position: 'absolute',
+      top: 200 + 'px',
+      left: window.innerWidth / 2 - 200 + 'px',
+      width: '400px',
+      height: '50px',
+      padding: '2px',
+      'box-shadow': '0 10px 6px -6px #777',
+      'border-radius': '3px'
+    });
+
+    /*
+    container.innerHTML = '<div style=""></div>'
+        color: #6E6E6E; overflow: hidden; white-space: nowrap; font-size: 3em;
+    */
+
+    /*
+    container.innerHTML = '<input type="text" style="padding: 10px; border: solid 1px #fff; box-shadow: inset 1px 1px 2px 0 #707070;">';
+    */
+
+    document.querySelector('body').appendChild(container);
+  });
+</script>
+
+</body>
+</html>

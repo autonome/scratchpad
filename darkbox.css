@@ -1,0 +1,212 @@
+@font-face {
+  font-family: 'ServerMono';
+  src: url('./fonts/ServerMono-Regular.otf');
+}
+
+:root {
+	--font-family: ServerMono;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --text: #17141f;
+    --background: #faf9fb;
+    --primary: #000000;
+    --secondary: #000000;
+    --accent: #000000;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e3e0eb;
+    --background: #050406;
+    --primary: #ffffff;
+    --secondary: #ffffff;
+    --accent: #ffffff;
+  }
+}
+
+
+* {
+	box-sizing: border-box;
+}
+
+* {
+	font-family: var(--font-family);
+}
+
+html {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+html,
+body {
+  padding: 1rem;
+	margin: 0;
+	font-family: var(--font-family);
+  color: var(--text);
+	background-color: var(--background);
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+div, h1 {
+  /*
+  border: solid 1px white;
+  */
+}
+
+.header {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: space-between;
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+h1, div {
+  padding: 0.5rem;
+  max-width: 40rem;
+}
+
+h1 {
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.form-container {
+  padding: 0;
+  border-radius: 3px;
+  max-width: 40rem;
+}
+.form-row {
+  display: flex;
+  justify-content: flex-end;
+}
+.form-row.buttons {
+  justify-content: space-between;
+}
+.form-row > label {
+  padding: .5em 1em .5em 0;
+  flex: 1;
+}
+.form-row > input {
+  flex: 2;
+}
+.form-row > input,
+.form-row > button {
+  padding: .5em;
+}
+.form-row > button {
+ background: gray;
+ color: white;
+ border: 0;
+}
+
+/* name / url */
+input {
+  padding: 0.2rem;
+}
+
+button {
+  /*margin-right: 0.2rem;*/
+}
+
+/* log */
+details, summary {
+  font-size: small;
+  font-style: italic;
+}
+
+.footer {
+  font-size: x-small;
+}
+
+.animating {
+  animation: lds-grid 1.2s linear infinite;
+}
+
+.lds-grid,
+.lds-grid div {
+  box-sizing: border-box;
+}
+.lds-grid {
+  padding: 0;
+  margin: 0;
+  display: inline-block;
+  position: relative;
+  min-width: 80px;
+  height: 80px;
+}
+.lds-grid div {
+  padding: 0;
+  margin: 0;
+  position: absolute;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: currentColor;
+  /*animation: lds-grid 1.2s linear infinite;*/
+}
+.lds-grid div:nth-child(1) {
+  top: 8px;
+  left: 8px;
+  animation-delay: 0s;
+}
+.lds-grid div:nth-child(2) {
+  top: 8px;
+  left: 32px;
+  animation-delay: -0.4s;
+}
+.lds-grid div:nth-child(3) {
+  top: 8px;
+  left: 56px;
+  animation-delay: -0.8s;
+}
+.lds-grid div:nth-child(4) {
+  top: 32px;
+  left: 8px;
+  animation-delay: -0.4s;
+}
+.lds-grid div:nth-child(5) {
+  top: 32px;
+  left: 32px;
+  animation-delay: -0.8s;
+}
+.lds-grid div:nth-child(6) {
+  top: 32px;
+  left: 56px;
+  animation-delay: -1.2s;
+}
+.lds-grid div:nth-child(7) {
+  top: 56px;
+  left: 8px;
+  animation-delay: -0.8s;
+}
+.lds-grid div:nth-child(8) {
+  top: 56px;
+  left: 32px;
+  animation-delay: -1.2s;
+}
+.lds-grid div:nth-child(9) {
+  top: 56px;
+  left: 56px;
+  animation-delay: -1.6s;
+}
+@keyframes lds-grid {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+

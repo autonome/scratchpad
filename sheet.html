@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Handsontable - JavaScript Data Grid Example</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/handsontable/styles/handsontable.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/handsontable/styles/ht-theme-main.min.css"
+    />
+  </head>
+  <body>
+    <div id="handsontable-grid"></div>
+    <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+    <script>
+      const element = document.getElementById("handsontable-grid");
+
+      new Handsontable(element, {
+        // theme name with obligatory ht-theme-* prefix
+        themeName: 'ht-theme-main-dark-auto',
+        // other options
+        data: [
+          { company: "Tagcat", country: "United Kingdom", rating: 4.4 },
+          { company: "Zoomzone", country: "Japan", rating: 4.5 },
+          { company: "Meeveo", country: "United States", rating: 4.6 },
+        ],
+        columns: [
+          { data: "company", title: "Company", width: 100 },
+          { data: "country", title: "Country", width: 170, type: "dropdown", source: ["United Kingdom", "Japan", "United States"] },
+          { data: "rating", title: "Rating", width: 100, type: "numeric" },
+        ],
+        rowHeaders: true,
+        navigableHeaders: true,
+        tabNavigation: true,
+        multiColumnSorting: true,
+        headerClassName: "htLeft",
+        licenseKey: "non-commercial-and-evaluation",
+      });
+    </script>
+  </body>
+</html>
