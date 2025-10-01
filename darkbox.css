@@ -27,6 +27,18 @@
   }
 }
 
+/* Animate containers to see when they re-render */
+div {
+  animation: show 1000ms 100ms 1 forwards;
+  box-shadow: 0px 0px 0px 5px red;
+  margin: 0.5em;
+}
+
+@keyframes show {
+  100% {
+    box-shadow: 0px 0px 0px 0px #FC5185;
+  }
+}
 
 * {
 	box-sizing: border-box;

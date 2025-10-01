@@ -1,0 +1,52 @@
+@font-face {
+  font-family: 'ServerMono';
+  src: url('./fonts/ServerMono-Regular.otf');
+}
+
+:root {
+	--font-family: ServerMono;
+  --text: #17141f;
+  --background: #faf9fb;
+  --primary: #000000;
+  --secondary: #000000;
+  --accent: #000000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e3e0eb;
+    --background: #050406;
+    --primary: #ffffff;
+    --secondary: #ffffff;
+    --accent: #ffffff;
+  }
+}
+
+* {
+	font-family: var(--font-family);
+}
+
+html, body, div {
+  padding: 0;
+	margin: 0;
+	font-family: var(--font-family);
+  color: var(--text);
+	background-color: var(--background);
+}
+
+/* Animate containers to see when they re-render */
+:root {
+  --debug: none; /* toggle to enable/disable debug */
+}
+
+div {
+  animation: var(--debug, show 500ms 100ms 1 forwards);
+  box-shadow: var(--debug, 0px 0px 0px 5px red);
+  margin: var(--debug, 0.5em);
+}
+
+@keyframes show {
+  100% {
+    box-shadow: 0px 0px 0px 0px #FC5185;
+  }
+}

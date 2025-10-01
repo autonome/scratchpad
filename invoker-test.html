@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<button commandfor="my-img" command="--rotate-left">Rotate left</button>
+<button commandfor="my-img" command="--rotate-right">Rotate right</button>
+<img id="my-img" src="../shilohcrazy.gif" alt="[add appropriate alt text here]" />
+<script>
+const myImg = document.getElementById("my-img");
+
+myImg.addEventListener("command", (event) => {
+    if (event.command === "--rotate-left") {
+          myImg.style.rotate = "-90deg";
+        } else if (event.command === "--rotate-right") {
+              myImg.style.rotate = "90deg";
+            }
+});
+</script>
