@@ -18,6 +18,13 @@ const createTodo = (text) => ({
   created: new Date()
 });
 
+// Receive events from components
+// and translate them to actions
+// and possibly FSM transitions
+const eventStreamHandler = (e) => {
+  console.log('EventStream:', e);
+};
+
 // Actions - pure functions that modify state
 const actions = {
   addTodo: (text) => {
@@ -39,7 +46,7 @@ const actions = {
     if (todo) {
       todo.completed = !todo.completed;
     }
-    // TODO: trigger reactivity
+    appState.todos.value = appState.todos.value.map(t => t.id === id ? todo : t);
   },
 
   setFilter: (filter) => {
@@ -159,21 +166,15 @@ const FilterControls = ({ filter, onFilterChange, fsm }) => {
   `;
 };
 
-const eventStreamHandler = (e) => {
-  console.log('EventStream:', e);
-};
-
 const TodoItem = ({ todo }) => {
   console.log('Rendering TodoItem:', todo);
 
-  /*
   effect(() => {
     console.log('TodoItem effect - todo changed:', todo.id, todo.completed.value);
+    eventStreamHandler({ type: 'todo-updated', todo });
   }, [todo.completed.value]);
-  */
 
   const onToggle = () => {
-    //todo.completed = !todo.completed;
     actions.toggleTodo(todo.id);
   };
 
@@ -198,14 +199,7 @@ const TodoItem = ({ todo }) => {
 };
 
 const TodoList = ({ todos, filter }) => {
-  console.log('Rendering TodoList with todos:', todos.value);
-
-  /*
-  effect(() => {
-    // number of todos changed
-    console.log('TodoList effect - todos changed:', todos.value.length);
-  }, [todos.value.length]);
-  */
+  //console.log('Rendering TodoList with todos:', todos.value);
 
   if (todos.value.length === 0) {
     const message = filter.value === 'all'
@@ -214,8 +208,6 @@ const TodoList = ({ todos, filter }) => {
 
     return html`<div class="empty-state">${message}</div>`;
   }
-
-  //console.log(todos.value);
 
   return html`
     <ul class="todo-list">
@@ -227,7 +219,7 @@ const TodoList = ({ todos, filter }) => {
 };
 
 const StateInfo = ({ appState, filter, todos }) => {
-
+  // State metadata
   const total = todos.value.length;
   const completed = todos.value.filter(t => t.completed).length;
   const active = total - completed;
@@ -244,7 +236,7 @@ const StateInfo = ({ appState, filter, todos }) => {
 const App = () => {
   return html`
     <div class="todo-app">
-      <h1>FSM + uhtml Todo List (Clean)</h1>
+      <h1>FSM + uhtml Todo List</h1>
       <${StateInfo}
         appState=${appState.current}
         filter=${appState.filter}
@@ -261,8 +253,6 @@ const App = () => {
       <${TodoList}
         todos=${appState.todos}
         filter=${appState.filter}
-        onToggle=${actions.toggleTodo}
-        onDelete=${actions.deleteTodo}
       />
     </div>
   `;
@@ -271,16 +261,4 @@ const App = () => {
 // Initialize
 await appFSM.go('initialized');
 
-// Sample data
-setTimeout(() => {
-  console.log('Adding sample todos');
-  actions.addTodo('Learn about state machines');
-  //appFSM.go('viewing');
-  console.log('Added samples:', appState.todos.value.length);
-}, 1000);
-setTimeout(() => {
-  actions.addTodo('Build reactive UIs with uhtml');
-}, 1000);
-setTimeout(() => {
-  actions.addTodo('Combine FSM with reactive programming');
-}, 1000);
+appState.todos.value = [...Array(3)].map((_, i) => actions.addTodo(`todo ${i}`));

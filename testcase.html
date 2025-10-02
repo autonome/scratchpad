@@ -1,0 +1,24 @@
+<script type="module">
+import { html, signal } from './uhtml.js';
+
+const items = signal([]);
+
+const ListItem = ({item}) =>
+  html`<li>${item.text}</li>`;
+
+const List = ({items}) =>
+  html`<ul>
+    ${items.value.map((item) =>
+      html`<${ListItem} item=${item} />`
+    )}
+  </ul>`;
+
+document.body.append(
+  html`<${List} items=${items} />`
+);
+
+for (let i = 0; i < 3; i++) {
+  items.value = [...items.value, ({text: `item ${i}`})];
+}
+
+</script>
