@@ -39,7 +39,7 @@ html, body, div {
   --debug: none; /* toggle to enable/disable debug */
 }
 
-div {
+div, ul, li, span, button {
   animation: var(--debug, show 500ms 100ms 1 forwards);
   box-shadow: var(--debug, 0px 0px 0px 5px red);
   margin: var(--debug, 0.5em);

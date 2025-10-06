@@ -48,7 +48,7 @@ body {
 
 
 /* Animate containers to see when they re-render */
-div {
+div, ul, li, span, button {
   animation: show 1000ms 100ms 1 forwards;
   box-shadow: 0px 0px 0px 5px red;
   margin: 0.5em;
@@ -87,6 +87,7 @@ div {
   font-size: 1rem;
   background: var(--input-bg);
   color: var(--text-color);
+  box-sizing: border-box;
 }
 
 .input-section input:focus {

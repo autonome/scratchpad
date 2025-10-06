@@ -1,57 +1,98 @@
 import { effect, html, signal, render } from './uhtml.js';
 import StateMachine from './fsm.js';
+import StorageProxy from './storage.js';
 
-// Core state - single source of truth
-const appState = {
-  current: signal('uninitialized'),
-  todos: signal([]),
-  filter: signal('')
+// shorter keys than crypto.randomUUID()
+const random = () => window.crypto.getRandomValues(new Uint32Array(1))[0];
+
+// Josh Comeau version
+const debounce = (callback, wait) => {
+  let timeoutId = null;
+  return (...args) => {
+    window.clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(() => {
+      callback.apply(null, args);
+    }, wait);
+  };
+}
+
+// Default state
+const defaultState = {
+  current: 'uninitialized',
+  todos: [],
+  filter: 'all'
 };
 
+const appKey = 'todo-rfsm';
+
+const reset = false;
+const storagingState = await StorageProxy(appKey, defaultState, reset);
+//console.log('stored:', storagingState.todos);
+
+// Reset each page load
+const appState = {
+  // Don't persist current state, as it's per page load.
+  // Maybe could do some app persistence here.
+  current: signal(defaultState.current),
+  todos: signal(storagingState.todos),
+  filter: signal(storagingState.filter)
+};
+
+// Debounced storage updater
+const updateStorage = () => { 
+  for (let i in defaultState) {
+    const stored = storagingState[i];
+    const live = appState[i].value;
+    if (Object.is(live, stored) === false) {
+      storagingState[i] = appState[i].value;
+      //console.log(`Updating storage key ${i} with value`, appState[i].value);
+    }
+  }
+};
+const updateStorageDebounced = debounce(updateStorage, 1000);
+
+// Update storage on changes to state
+effect(() => {
+  //console.log('storage effect, state:', appState.current.value);
+  updateStorage();
+}, [appState.current.value, appState.filter.value, appState.todos.value]);
+
+// Component container
 const appContainer = document.getElementById('app');
 
 // Todo factory
 const createTodo = (text) => ({
-  id: Date.now(),
+  id: random(),
   text: text.trim(),
   completed: false,
-  created: new Date()
+  created: new Date(),
+  modified: new Date()
 });
-
-// Receive events from components
-// and translate them to actions
-// and possibly FSM transitions
-const eventStreamHandler = (e) => {
-  console.log('EventStream:', e);
-};
 
 // Actions - pure functions that modify state
 const actions = {
-  addTodo: (text) => {
+  addTodo: ({text}) => {
     if (text.trim()) {
-      console.log('Action.addTodo:', text);
       const newTodo = createTodo(text);
       appState.todos.value = [...appState.todos.value, newTodo];
+      appState.current.value = 'viewing';
     }
   },
 
-  deleteTodo: (id) => {
-    console.log('Deleting todo with id:', id);
-    appState.todos.value = appState.todos.value.filter(t => t.id !== id);
-  },
-
-  toggleTodo: (id) => {
-    console.log('Toggling todo with id:', id);
-    const todo = appState.todos.value.find(t => t.id === id);
-    if (todo) {
-      todo.completed = !todo.completed;
+  updateTodo: ({todo}) => {
+    if (todo.deleted) {
+      appState.todos.value = appState.todos.value.filter(t => t.id != todo.id);
+      console.log('deleted');
     }
-    appState.todos.value = appState.todos.value.map(t => t.id === id ? todo : t);
+    else {
+      appState.todos.value = appState.todos.value.map(t => t.id === todo.id ? { ...t, ...todo } : t);
+    }
+    appState.current.value = 'viewing';
   },
 
   setFilter: (filter) => {
     console.log('Setting filter to:', filter);
-    appState.filter.value = filter;
+    //appState.filter.value = filter;
   }
 };
 
@@ -61,61 +102,79 @@ const appFSM = new StateMachine({
   states: {
     uninitialized: ['initialized'],
     initialized: ['viewing'],
-    viewing: ['adding', 'filtering'],
+    viewing: ['adding', 'filtering', 'viewing'],
     adding: ['viewing'],
     filtering: ['viewing']
   }
 });
 
 appFSM.on('*', async (prev) => {
-  console.log(`FSM state changed from ${prev} to ${appFSM.current}`);
+  console.log(`FSM.on(*): state changed from ${prev} to ${appFSM.current}`);
   appState.current.value = appFSM.current;
 });
 
 appFSM.on('initialized', async () => {
   render(appContainer, html`<${App} />`);
-  console.log('FSM.initialized');
-  await appFSM.go('viewing', 'all');
+  //console.log('FSM.initialized, setting state to viewing');
+  appState.current.value = 'viewing';
 });
 
-appFSM.on('viewing', async (prev, filter) => {
-  console.log('FSM.viewing:', prev, filter);
-  actions.setFilter(filter);
+appFSM.on('viewing', async (prev) => {
+  //console.log('FSM.viewing:', prev);
 });
 
 appFSM.on('filtering', async (prev, filter) => {
-  console.log('FSM.filtering:', prev, filter);
   actions.setFilter(filter);
-  await appFSM.go('viewing', filter);
+  //await appFSM.go('viewing', filter);
 });
 
-// FSM event handlers - coordinate state changes
-appFSM.on('adding', async (prev, data) => {
-  console.log('FSM.adding:', prev, data);
-  actions.addTodo(data);
-  await appFSM.go('viewing');
-});
+// Receive events from components
+// and maps them to actions
+const eventStreamHandler = (e) => {
+  //console.log('EventStream:', e.name, e.props);
+  if (e.name in actions) {
+    console.log('EventStream: invoking action:', e.name, e.props);
+    actions[e.name](e.props);
+  }
+  else {
+    console.error('Unknown event, no matching action:', e.name);
+  }
+};
+
+// Detects state changes and triggers FSM transitions
+// TODO: should not have actions setting state directly
+// - make an action which trigger FSM?
+// - or action calls fsm.go(), and a listener updates signal val?
+const stateConductor = (stateMachine, currentStateSignal) => {
+  effect(() => {
+    //console.log('StateConductor: effect - current state signal changed to:', currentStateSignal.value);
+    if (stateMachine.current != currentStateSignal.value) {
+      //console.log('StateConductor: changing state to:', currentStateSignal.value);
+      stateMachine.go(currentStateSignal.value);
+    }
+    //console.log('State changed to:', currentStateSignal.value);
+  }, [currentStateSignal.value]);
+};
 
 // Components - pure UI functions
 const TodoInput = () => {
   const textSignal = signal('');
 
-  const handleInput = async (e) => {
-    //console.log('INPUT:', e);
-    //textSignal.value = e.target.value;
-  };
-  
+  /*
   effect(async () => {
     console.log('TodoInput effect - text changed:', textSignal.value);
-    if (textSignal.value.trim())
-      await appFSM.go('adding', textSignal.value);
+    if (textSignal.value.trim()) {
+      console.log('TodoInput effect - Adding todo:', textSignal.value);
+      eventStreamHandler({ name: 'addTodo', props: { text: textSignal.value }});
+      textSignal.value = '';
+    }
   }, [textSignal.value]);
+  */
 
   const handleKeyPress = async (e) => {
-    console.log('KEYPRESS:', e.key, textSignal.value);
     if (e.key === 'Enter' && e.target.value.trim()) {
       textSignal.value = e.target.value;
-      //textSignal.value = '';
+      eventStreamHandler({ name: 'addTodo', props: { text: textSignal.value }});
     }
   };
 
@@ -127,28 +186,19 @@ const TodoInput = () => {
         placeholder="What needs to be done?"
         value=${textSignal.value}
         onkeypress=${handleKeyPress}
-        oninput=${handleInput}
       />
     </div>
   `;
 };
 
-// filter todo based on state
-const filterTodos = (todos, filter) => {
-  /*
-  const show = (t, f) => {
-    return filter == 'completed' && t.completed
-        || filter == 'active' && !t.completed
-        || true
-  });
-  return todos.filter(t => show(t.completed));
-  */
-  return todos;
-};
-
 const FilterButton = ({ filter, label, active }) => {
+
+  const sFilter = signal(filter);
+
   const onclick = async () => {
-    await appFSM.go('filtering', filter);
+    sFilter.value = filter;
+    //await appFSM.go('filtering', filter);
+    //eventStreamHandler({ name: 'setFilter', props: { filter: sFilter.value }});
   };
 
   return html`<button class="${active ? 'active' : 'not'}"
@@ -167,39 +217,50 @@ const FilterControls = ({ filter, onFilterChange, fsm }) => {
 };
 
 const TodoItem = ({ todo }) => {
-  console.log('Rendering TodoItem:', todo);
+  //console.log('Rendering TodoItem:', todo);
 
+  // kinda wonky
+  todo.deleted = false;
+  
+  /*
+  // broken
+  //const sTodo = signal(todo);
+
+  // effects don't fire
   effect(() => {
-    console.log('TodoItem effect - todo changed:', todo.id, todo.completed.value);
-    eventStreamHandler({ type: 'todo-updated', todo });
-  }, [todo.completed.value]);
+    console.log('TodoItem effect - todo changed (old/new):', todo, sTodo.value);
+    //eventStreamHandler({ name: 'updateTodo', props: { todo }});
+  }, [sTodo.value.completed, sTodo.value.deleted]);
+  */
 
-  const onToggle = () => {
-    actions.toggleTodo(todo.id);
+  const onToggle = (e) => {
+    todo.completed = e.target.checked;
+    eventStreamHandler({ name: 'updateTodo', props: { todo }});
   };
 
   const onDelete = () => {
-    actions.deleteTodo(todo.id);
+    todo.deleted = true;
+    eventStreamHandler({ name: 'updateTodo', props: { todo }});
   };
 
   return html`
-    <li class=${'todo-item' + (todo.completed.value ? ' completed' : '')}>
+    <li class=${'todo-item' + (todo.completed === true ? ' completed' : '')}>
       <input
         type="checkbox"
-        checked=${todo.completed.value}
-        onchange=${() => onToggle(todo.id)}
+        defaultChecked=${todo.completed? 'true' : 'false'}
+        onchange=${onToggle}
       />
       <span class="todo-text">${todo.text}</span>
       <button
         class="delete-btn"
-        onclick=${() => onDelete(todo.id)}
+        onclick=${onDelete}
       >Delete</button>
     </li>
   `;
 };
 
 const TodoList = ({ todos, filter }) => {
-  //console.log('Rendering TodoList with todos:', todos.value);
+  console.log('Rendering TodoList with todos:', todos.value);
 
   if (todos.value.length === 0) {
     const message = filter.value === 'all'
@@ -209,11 +270,15 @@ const TodoList = ({ todos, filter }) => {
     return html`<div class="empty-state">${message}</div>`;
   }
 
+  const ff = (todo) => {
+    return filter == 'all'
+      || filter == 'completed' && todo.completed
+      || filter == 'active' && !todo.completed;
+  };
+
   return html`
     <ul class="todo-list">
-      ${todos.value.map(todo =>
-        html`<${TodoItem} todo=${todo} />`
-      )}
+      ${todos.value.filter(ff).map(todo => TodoItem({todo}))}
     </ul>
   `;
 };
@@ -233,10 +298,11 @@ const StateInfo = ({ appState, filter, todos }) => {
   `;
 };
 
-const App = () => {
+const App = (count) => {
+  const counter = signal(count || 0);
   return html`
     <div class="todo-app">
-      <h1>FSM + uhtml Todo List</h1>
+      <h1>FSM + uhtml Todo List (${counter.value}</h1>
       <${StateInfo}
         appState=${appState.current}
         filter=${appState.filter}
@@ -244,11 +310,9 @@ const App = () => {
       />
       <${TodoInput}
         inputText=${appState.inputText}
-        onAdd=${actions.setInputText}
       />
       <${FilterControls}
         filter=${appState.filter}
-        onFilterChange=${actions.setFilter}
       />
       <${TodoList}
         todos=${appState.todos}
@@ -258,7 +322,21 @@ const App = () => {
   `;
 };
 
-// Initialize
-await appFSM.go('initialized');
 
-appState.todos.value = [...Array(3)].map((_, i) => actions.addTodo(`todo ${i}`));
+// Initialize
+console.log('main: initializing stateConductor');
+await stateConductor(appFSM, appState.current);
+console.log('main: initialized stateConductor');
+appState.current.value = 'initialized';
+console.log('main: set current state to initialized');
+
+if (appState.todos.length == 0) {
+  console.log('ADDING EXAMPLES because no todos exist');
+  // is there a savings in doing this before initializing the fsm?
+  // maybe just confusing
+  //[...Array(3)].map((_, i) => actions.addTodo(`todo ${i}`));
+  appState.todos.value  = [...Array(3)].map((_, i) => createTodo(`todo ${i}`));
+  console.log('Initial todos:', appState.todos.value);
+}
+
+
