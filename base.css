@@ -1,10 +1,5 @@
-@font-face {
-  font-family: 'ServerMono';
-  src: url('./fonts/ServerMono-Regular.otf');
-}
-
 :root {
-	--font-family: ServerMono;
+  --system-ui: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   --text: #17141f;
   --background: #faf9fb;
   --primary: #000000;
@@ -23,7 +18,7 @@
 }
 
 * {
-	font-family: var(--font-family);
+	font-family: var(--system-ui);
 }
 
 html, body, div {
@@ -36,11 +31,12 @@ html, body, div {
 
 /* Animate containers to see when they re-render */
 :root {
-  --debug: none; /* toggle to enable/disable debug */
+  /* uncomment for animated container mode */
+  /*--debug: none;*/
 }
 
 div, ul, li, span, button {
-  animation: var(--debug, show 500ms 100ms 1 forwards);
+  animation: var(--debug, show 1000ms 100ms 1 forwards);
   box-shadow: var(--debug, 0px 0px 0px 5px red);
   margin: var(--debug, 0.5em);
 }

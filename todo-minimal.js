@@ -330,7 +330,7 @@ console.log('main: initialized stateConductor');
 appState.current.value = 'initialized';
 console.log('main: set current state to initialized');
 
-if (appState.todos.length == 0) {
+if (appState.todos.value.length == 0) {
   console.log('ADDING EXAMPLES because no todos exist');
   // is there a savings in doing this before initializing the fsm?
   // maybe just confusing
