@@ -32,7 +32,7 @@ html, body, div {
 /* Animate containers to see when they re-render */
 :root {
   /* uncomment for animated container mode */
-  /*--debug: none;*/
+  --debug: none;
 }
 
 div, ul, li, span, button {

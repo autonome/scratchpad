@@ -7,51 +7,59 @@
   }
 
   function FSM(config) {
-    var events = {};
-    var fsm = {
+    const events = {};
+
+    // TODO: validate params, eg can't have dead end states, or need some exit func
+    const fsm = {
       transitions : config.states,
       current     : config.initial,
+      next        : null,
       error       : config.error,
     };
-    fsm.bind = function(evt, fn) {
+    fsm.bind = (evt, fn) => {
       events[evt] = events[evt] || [];
       events[evt] = events[evt].concat(fn);
       return fsm;
     };
-    fsm.unbind = function(evt, fn) {
+    fsm.unbind = (evt, fn) => {
       if (evt in events && events[evt].indexOf(fn) > -1)
         events[evt].splice(events[evt].indexOf(fn), 1);
       return fsm;
     };
     fsm.on = fsm.bind;
 
-    function getCbs(key) {
-      return events[key] || [];
-    }
+    const getCbs = (key) => events[key] || [];
 
-    fsm.go = function(next) {
-      var prev = fsm.current;
-      var params = Array.prototype.slice.call(arguments, 1);
+    fsm.go = function(next = null) {
+      const prev = fsm.current;
+      const params = Array.prototype.slice.call(arguments, 1);
+
+      // Default to first next state for current, so can just call `.go()`
+      // TODO: file issue
+      if (next === null) {
+        next = fsm.transitions[prev][0];
+      }
 
       if (fsm.transitions[prev].indexOf(next) < 0)
         return Promise.reject(new ITE(prev, next));
 
-      var after = getCbs('after:' + prev);
-      var pre = getCbs('before:' + next);
-      var on = getCbs(next);
-      var post = getCbs('*');
+      const after = getCbs('after:' + prev);
+      const pre = getCbs('before:' + next);
+      const on = getCbs(next);
+      const post = getCbs('*');
 
-      var beforePost = after.concat(pre, on);
-      function getPrefix(index) {
+      const beforePost = after.concat(pre, on);
+
+      const getPrefix = (index) => {
         return (index < after.length ? [next] : index < beforePost.length ? [prev] : [prev, next]);
-      }
+      };
 
-      var stateChange = after.length + pre.length;
+      const stateChange = after.length + pre.length;
 
       return beforePost
         .concat(post, function ensureStateChange() {})
         .reduce(function(series, task, index) {
-          var args = getPrefix(index).concat(params);
+          const args = getPrefix(index).concat(params);
           return series.then(function() {
             if (index === stateChange) {
               fsm.current = next;

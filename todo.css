@@ -95,6 +95,17 @@ div, ul, li, span, button {
   border-color: var(--button-active-bg);
 }
 
+textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 1rem;
+  background: var(--input-bg);
+  color: var(--text-color);
+  box-sizing: border-box;
+}
+
 .controls {
   margin-bottom: 2rem;
   display: flex;
@@ -102,7 +113,7 @@ div, ul, li, span, button {
   flex-wrap: wrap;
 }
 
-.controls button {
+button {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border-color);
   background: var(--button-bg);
@@ -112,11 +123,11 @@ div, ul, li, span, button {
   font-size: 0.9rem;
 }
 
-.controls button:hover {
+button:hover {
   background: var(--button-hover);
 }
 
-.controls button.active {
+button.active {
   background: var(--button-active-bg);
   color: var(--button-active-text);
   border-color: var(--button-active-bg);

@@ -24,6 +24,7 @@ export function signal(value) {
   return new Proxy(holder, handler);
 };
 
+/*
 export function reactSignal(value) {
   const subscriptions = new Set();
 
@@ -42,6 +43,7 @@ export function reactSignal(value) {
 
   return [read, write];
 };
+*/
 
 export function effect(fn) {
   const effect = {
@@ -53,4 +55,39 @@ export function effect(fn) {
   };
 
   effect.execute();
+};
+
+// Template processor
+export function html (template, ...values) {
+  // Create a unique ID for this template instance
+  const templateId = 'tpl_' + Math.random().toString(36).substr(2, 9);
+  window.htmlEventHandlers = window.htmlEventHandlers || {};
+
+  // Process the template and values
+  let htmlString = '';
+  for (let i = 0; i < template.length; i++) {
+    htmlString += template[i];
+
+    if (i < values.length) {
+      const value = values[i];
+
+      // Check if this value is a function (event handler)
+      if (typeof value === 'function') {
+        // Store the function globally with unique ID
+        const handlerId = 'h_' + Math.random().toString(36).substr(2, 9);
+        window.htmlEventHandlers[handlerId] = value;
+
+        // Replace with inline handler call
+        htmlString += `window.htmlEventHandlers.${handlerId}(event)`;
+      } else if (Array.isArray(value)) {
+        // Handle arrays (like mapped components)
+        htmlString += value.join('');
+      } else {
+        // Regular value
+        htmlString += value;
+      }
+    }
+  }
+
+  return htmlString;
 };

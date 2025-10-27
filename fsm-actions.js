@@ -1,19 +1,7 @@
 import StateMachine from './fsm.js';
 import StorageProxy from './storage.js';
-import { signal, effect } from './reactive.js';
-
-/*
-const s = signal(0);
-console.log('signal', s);
-console.log('s before', s.value);
-s.value = 1;
-console.log('s after', s.value);
-
-effect(() => {
-  console.log('s effect', s.value);
-});
-*/
-
+import StreamMapper from './streammapper.js';
+import { effect, html, signal } from './reactive.js';
 
 // shorter keys than crypto.randomUUID()
 const random = () => window.crypto.getRandomValues(new Uint32Array(1))[0];
@@ -30,24 +18,20 @@ const defaultState = {
   items: []
 };
 
-// Set up storage
-const appKey = 'rfsm-actions';
-const reset = false;
-const debug = false;
-const storagingState = await StorageProxy(appKey, defaultState, reset, debug);
+const DEBUG = false;
 
-/*
-for (const k in storagingState) {
-  console.log('from storage', k, storagingState[k]);
-}
-*/
+// Use a unique key for app storage
+const appKey = 'rfsm-actions';
+const clearStorage = false;
+
+// Initialize storage proxy
+const storagingState = await StorageProxy(appKey, defaultState, clearStorage, DEBUG);
 
 // Set up signals
 const appState = {};
 for (const k in defaultState) {
   appState[k] =  signal(storagingState[k]);
 };
-//console.log('appState', appState);
 
 // Debounced storage updater
 // TODO: should be generalized
@@ -67,32 +51,41 @@ const updateStorage = () => {
 const appContainer = document.querySelector('#app');
 
 // State machine for application flow
-const appFSM = new StateMachine({
+const machineConfig = {
   initial: 'uninitialized',
   states: {
     uninitialized: ['initialized'],
     initialized: ['viewing'],
-    viewing: ['viewing'],
+    viewing: ['editing'],
+    editing: ['viewing']
   }
-});
+};
+
+const machine = new StateMachine(machineConfig);
 
 /*
-// Drives storage writes
-appFSM.on('*', (prev) => {
-  console.log(`FSM.on(*): state changed from ${prev} to ${appFSM.current}, (${appState.current.value})`);
-  //updateStorage();
+machine.on('*', (prev) => {
+  //console.log(`FSM.on(*): state changed from ${prev} to ${machine.current}, (${appState.current.value})`);
+  console.log('FSM.on(*): ', prev, 'to', machine.current);
+  if (prev !== machine.current) {
+    console.log('FSM.on(*): changing state', prev, 'to', machine.current);
+    //appState.current.value = machine.current;
+  }
 });
 */
 
-appFSM.on('initialized', (prev) => {
+machine.on('initialized', async (prev) => {
   console.log('FSM.initialized: rendering');
-  appContainer.innerHTML= App();
+  appContainer.innerHTML = html`${App(appState)}`;
   console.log('FSM.initialized: rendering started, setting state to viewing');
-  appState.current.value = 'viewing';
+  //appState.current.value = 'viewing';
+  appState.current.value = machine.current;
+  machine.go();
 });
 
-appFSM.on('viewing', (prev) => {
+machine.on('viewing', (prev) => {
   console.log('FSM.viewing');
+  appContainer.innerHTML = html`${App(appState)}`;
 });
 
 // Item factory
@@ -104,21 +97,24 @@ const createItem = (text) => ({
   modified: new Date()
 });
 
-// Actions - pure functions that modify state
+/*
+ * Actions - pure functions that modify state
+ *
+ */
 const actions = {
   addItem: async ({text}) => {
     if (text.trim()) {
       const newItem = createItem(text);
-      appState.items.value = [...appState.items, newItem];
+      appState.items.value = [...appState.items.value, newItem];
       console.log('updateItem(): setting state to viewing');
-      appState.current.value = 'viewing';
+      //appState.current.value = 'viewing';
     }
   },
 
   updateItem: async ({item}) => {
     console.log('actions.updateItem', item);
     if ('deleted' in item) {
-      appState.items.value = appState.items.filter(t => t.id != item.id);
+      appState.items.value = appState.items.value.filter(t => t.id != item.id);
       console.log('deleted');
     }
     else {
@@ -135,86 +131,29 @@ const actions = {
       console.log('new items', newItems);
     }
     console.log('updateItem(): setting state to viewing');
-    appState.current.value = 'viewing';
+    //appState.current.value = 'viewing';
+  },
+
+  deleteItem: async ({item}) => {
+    console.log('actions.deleteItem', item);
+    appState.items.value = appState.items.value.filter(t => t.id != item.id);
+    console.log('deletedItem(): setting state to viewing');
+    //appState.current.value = 'viewing';
   }
 };
 
-// Receive events from components
-// and map them to actions
+// Initialize stream mapper - a function customized to the provided
+// set of actions, and calls them when matching events are sent to it.
 
-const emit = async (name, data) => {
-  console.log('emit', name, data);
-  window.dispatchEvent(new CustomEvent(name, { detail: data }));
-  console.log('emit complete');
-};
+const listener = async () => { await machine.go() };
 
-const eventStreamHandler = async (e) => {
-  console.log('stream event:', e);
-  const { name, props } = e.detail;
-  if (name != null) {
-    console.log('EventStream: invoking action:', name, props);
-    await actions[name](props);
-  }
-  else {
-    console.error('Unknown event, no matching action:', e.name);
-  }
-};
-window.addEventListener('stream', eventStreamHandler);
+const emit = StreamMapper(actions, listener);
 
+/*
+ * Components - pure UI functions
+ *
+ */
 
-// Detects state changes and triggers FSM transitions
-// TODO: should not have actions setting state directly
-// - make an action which trigger FSM?
-// - or action calls fsm.go(), and a listener updates signal val?
-const stateConductor = (stateMachine, currentStateSignal) => {
-  //effect(() => {
-    console.log(`StateConductor() effect prev: ${stateMachine.current}, next: ${currentStateSignal.value}`);
-    if (stateMachine.current != currentStateSignal.value) {
-      //console.log('StateConductor: changing state to:', currentStateSignal);
-      stateMachine.go(currentStateSignal.value).then(() => {
-        console.log(`StateConductor() transition from ${stateMachine.current} to ${currentStateSignal.value} is complete`);
-      });
-    }
-    //console.log('State changed to:', currentStateSignal.value);
-  //}, [currentStateSignal.value]);
-};
-
-// Template processor
-const html = (template, ...values) => {
-  // Create a unique ID for this template instance
-  const templateId = 'tpl_' + Math.random().toString(36).substr(2, 9);
-  window.htmlEventHandlers = window.htmlEventHandlers || {};
-
-  // Process the template and values
-  let htmlString = '';
-  for (let i = 0; i < template.length; i++) {
-    htmlString += template[i];
-
-    if (i < values.length) {
-      const value = values[i];
-
-      // Check if this value is a function (event handler)
-      if (typeof value === 'function') {
-        // Store the function globally with unique ID
-        const handlerId = 'h_' + Math.random().toString(36).substr(2, 9);
-        window.htmlEventHandlers[handlerId] = value;
-
-        // Replace with inline handler call
-        htmlString += `window.htmlEventHandlers.${handlerId}(event)`;
-      } else if (Array.isArray(value)) {
-        // Handle arrays (like mapped components)
-        htmlString += value.join('');
-      } else {
-        // Regular value
-        htmlString += value;
-      }
-    }
-  }
-
-  return htmlString;
-};
-
-// Components - pure UI functions
 const StateInfo = ({ currentState, items }) => {
   console.log('StateInfo', currentState, items);
   // State metadata
@@ -232,68 +171,77 @@ const Textarea = ({ value }) => {
   const text = signal(value);
 
   const oninput = (e) => {
-    console.log(`textarea.oninput(): ${text.value} -> ${e.target.value}`);
     text.value = e.target.value;
   };
-
-  effect(() => {
-    console.log('changed', text.value);
-  });
 
   return html`
     <textarea oninput=${oninput}>${text.value}</textarea>
   `;
 };
 
-const Card = ({item}) => {
-  //console.log('Card', item);
+const Button = ({ label, onclick }) => {
+  const s = signal(label);
+  return html`<button onclick=${onclick}>${s.value}</button>`;
+};
+
+const Card = ({ item }) => {
+  const s = signal(item);
 
   const onInput = async (e) => {
-    const newVal = e.target.value;
-    console.log('card.onInput:', newVal);
-    item.text = newVal;
-    console.log('card.onInput: set');
-    await emit('stream', { name: 'updateItem', props: { item }});
-    console.log('card.onInput: done');
+    s.value = item.text = e.target.value;
+    emit('updateItem', { item });
+  };
+
+  const onDelete = async (e) => {
+    emit('deleteItem', { item });
   };
 
   return html`
     <div oninput=${onInput}>
-      ${Textarea({value: item.text})}
+      ${Textarea({value: s.value.text})}
+      ${Button({label: 'Delete', onclick: onDelete})}
     </div>
   `;
 };
 
 const Cards = ({items}) => {
-  //console.log('Cards', items);
+  const s = signal(items);
+
   return html`
     <div>
-      ${items.map(item => Card({item}))}
+      ${s.value.map(item => Card({item}))}
     </div>
   `;
 };
 
-const App = () => {
-  //console.log('App', appState);
-  appState.counter.value = appState.counter.value + 1;
-  //console.log('currentState', appState.current.value, 'items', appState.items.value);
+const App = (state) => {
+  console.log('App', state);
+  state.counter.value = state.counter.value + 1;
+
+  const onClickNew = () => emit('addItem', {text: 'New item'});
+
+  const layout = signal(state.layout.value);
+  const onClickLayout = () => console.log('Layout change');
+
+  const sort = signal(state.sort.value);
+  const onClickSort = () => console.log('Sort change');
+
   return html`
+    <header>
+      <h1>Reactive FSM Test</h1>
+    </header>
     <div class="item-app">
-      <h1>FSM+uHTML Grid (${appState.counter.value})</h1>
-      ${StateInfo({currentState: appState.current.value, items: appState.items.value})}
-      ${Cards({items: appState.items.value})}
+      ${Button({label: '+', onclick: onClickNew})}
+      ${Button({label: layout.value, onclick: onClickLayout})}
+      ${Button({label: sort.value, onclick: onClickSort})}
+      ${StateInfo({currentState: state.current.value, items: state.items.value})}
+      ${Cards({items: state.items.value})}
     </div>
+    <footer>
+      <div>(You've been here ${state.counter.value} times.</div>
+    </footer>
   `;
 };
-
-// Initialize signal for current FSM state
-appState.current = signal(appFSM.current);
-
-// Update storage on changes to state
-effect(() => {
-  //console.log('effect() Appstate.current effect:', appState.current.value);
-  updateStorage();
-}, [appState.current.value]);
 
 // Example data
 if (appState.items.length == 0) {
@@ -301,15 +249,28 @@ if (appState.items.length == 0) {
   // is there a savings in doing this before initializing the fsm?
   // maybe just confusing
   //[...Array(3)].map((_, i) => actions.addItem(`item ${i}`));
-  const itemCount = 1;
+  const itemCount = 3;
   appState.items.value = [...Array(itemCount)].map((_, i) => createItem(`item ${i}`));
   console.log('Initial items:', appState.items);
 }
 
-// Initialized effect that syncs the signal to the state machine
-appState.current.value = 'initialized';
-stateConductor(appFSM, appState.current);
+// Initialized signal and effect that syncs the signal to the state machine
+appState.current = signal(machine.current);
+
+const delay = f => setTimeout(f, DEBUG ? 2000 : 0);
+
+//
+effect(async () => {
+  // Writes
+  // TODO: debounce
+  updateStorage();
+  const next = machineConfig.states[machine.current][0];
+    console.log('Dirty flag, next state:', next);
+//}, [appState.current.value]);
+}, [appState.current.value]);
 
 // Fire up the machine
+await machine.go();
+
 console.log('main complete');
 
