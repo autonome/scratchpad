@@ -1,7 +1,8 @@
 import StateMachine from './fsm.js';
 import StorageProxy from './storage.js';
 import StreamMapper from './streammapper.js';
-import { effect, html, signal } from './reactive.js';
+import debounce from './debounce.js';
+import { effect, html, signal, render } from './reactive.js';
 
 // shorter keys than crypto.randomUUID()
 const random = () => window.crypto.getRandomValues(new Uint32Array(1))[0];
@@ -20,6 +21,9 @@ const defaultState = {
 
 const DEBUG = false;
 
+// Maximum write interval
+const writeInterval = 5000;
+
 // Use a unique key for app storage
 const appKey = 'rfsm-actions';
 const clearStorage = false;
@@ -35,17 +39,14 @@ for (const k in defaultState) {
 
 // Debounced storage updater
 // TODO: should be generalized
-const updateStorage = () => { 
+const updateStorageImmediately = () => {
+  console.log('updateStorage()');
   for (let i in defaultState) {
-    const stored = storagingState[i];
-    const live = appState[i];
-    if (Object.is(live, stored) === false) {
-      storagingState[i] = appState[i].value;
-      //console.log(`Updating storage key ${i} with value`, appState[i]);
-    }
+    storagingState[i] = appState[i].value;
   }
 };
-//const updateStorageDebounced = debounce(updateStorage, 1000);
+
+const updateStorage = debounce(updateStorageImmediately, writeInterval);
 
 // Component container
 const appContainer = document.querySelector('#app');
@@ -55,37 +56,51 @@ const machineConfig = {
   initial: 'uninitialized',
   states: {
     uninitialized: ['initialized'],
-    initialized: ['viewing'],
-    viewing: ['editing'],
-    editing: ['viewing']
+    initialized: ['viewlist'],
+    viewlist: ['editing'],
+    editing: ['viewlist']
   }
 };
 
 const machine = new StateMachine(machineConfig);
 
-/*
+// Initialize signal tracking machine current state
+appState.current = signal(machine.current);
+
 machine.on('*', (prev) => {
   //console.log(`FSM.on(*): state changed from ${prev} to ${machine.current}, (${appState.current.value})`);
   console.log('FSM.on(*): ', prev, 'to', machine.current);
-  if (prev !== machine.current) {
-    console.log('FSM.on(*): changing state', prev, 'to', machine.current);
-    //appState.current.value = machine.current;
+
+  // Sync signal to state machine current state
+  appState.current.value = machine.current;
+
+  console.log('Effect: state changed to', machine.current);
+  // Don't bother writing until after initialization
+  if (!['uninitialized', 'initialized'].includes(machine.current)) {
+    console.log('effect: calling updateStorage()');
+    updateStorage();
   }
 });
-*/
 
 machine.on('initialized', async (prev) => {
-  console.log('FSM.initialized: rendering');
-  appContainer.innerHTML = html`${App(appState)}`;
-  console.log('FSM.initialized: rendering started, setting state to viewing');
-  //appState.current.value = 'viewing';
-  appState.current.value = machine.current;
+  console.log('FSM.initialized');
+
+  // Increment counter once per page load
+  appState.counter.value = appState.counter.value + 1;
+
   machine.go();
 });
 
-machine.on('viewing', (prev) => {
-  console.log('FSM.viewing');
-  appContainer.innerHTML = html`${App(appState)}`;
+machine.on('viewlist', (prev) => {
+  console.log('FSM.viewlist');
+
+  // Watch for item changes and re-render
+  // This effect runs immediately, handling the initial render
+  effect(() => {
+    const items = appState.items.value; // Subscribe to items
+    console.log('Rendering app with', items.length, 'items');
+    render(appContainer, html`${App(appState)}`);
+  });
 });
 
 // Item factory
@@ -104,10 +119,10 @@ const createItem = (text) => ({
 const actions = {
   addItem: async ({text}) => {
     if (text.trim()) {
+      console.log('addItem()');
       const newItem = createItem(text);
       appState.items.value = [...appState.items.value, newItem];
-      console.log('updateItem(): setting state to viewing');
-      //appState.current.value = 'viewing';
+      console.log('addItem(): done');
     }
   },
 
@@ -130,15 +145,13 @@ const actions = {
       }
       console.log('new items', newItems);
     }
-    console.log('updateItem(): setting state to viewing');
-    //appState.current.value = 'viewing';
+    console.log('updateItem(): done');
   },
 
   deleteItem: async ({item}) => {
     console.log('actions.deleteItem', item);
     appState.items.value = appState.items.value.filter(t => t.id != item.id);
-    console.log('deletedItem(): setting state to viewing');
-    //appState.current.value = 'viewing';
+    console.log('deletedItem()');
   }
 };
 
@@ -156,6 +169,7 @@ const emit = StreamMapper(actions, listener);
 
 const StateInfo = ({ currentState, items }) => {
   console.log('StateInfo', currentState, items);
+
   // State metadata
   const total = items.length;
 
@@ -197,14 +211,14 @@ const Card = ({ item }) => {
   };
 
   return html`
-    <div oninput=${onInput}>
+    <div data-key="${item.id}" oninput=${onInput}>
       ${Textarea({value: s.value.text})}
       ${Button({label: 'Delete', onclick: onDelete})}
     </div>
   `;
 };
 
-const Cards = ({items}) => {
+const Cards = ({ items }) => {
   const s = signal(items);
 
   return html`
@@ -216,7 +230,6 @@ const Cards = ({items}) => {
 
 const App = (state) => {
   console.log('App', state);
-  state.counter.value = state.counter.value + 1;
 
   const onClickNew = () => emit('addItem', {text: 'New item'});
 
@@ -234,7 +247,7 @@ const App = (state) => {
       ${Button({label: '+', onclick: onClickNew})}
       ${Button({label: layout.value, onclick: onClickLayout})}
       ${Button({label: sort.value, onclick: onClickSort})}
-      ${StateInfo({currentState: state.current.value, items: state.items.value})}
+      ${StateInfo({currentState: machine.current, items: state.items.value})}
       ${Cards({items: state.items.value})}
     </div>
     <footer>
@@ -254,23 +267,13 @@ if (appState.items.length == 0) {
   console.log('Initial items:', appState.items);
 }
 
-// Initialized signal and effect that syncs the signal to the state machine
-appState.current = signal(machine.current);
-
-const delay = f => setTimeout(f, DEBUG ? 2000 : 0);
-
-//
-effect(async () => {
-  // Writes
-  // TODO: debounce
-  updateStorage();
-  const next = machineConfig.states[machine.current][0];
-    console.log('Dirty flag, next state:', next);
-//}, [appState.current.value]);
-}, [appState.current.value]);
-
 // Fire up the machine
 await machine.go();
+
+window.addEventListener('beforeunload', (e) => {
+  console.log('beforeunload: flushing storage');
+  updateStorageImmediately();
+});
 
 console.log('main complete');
 

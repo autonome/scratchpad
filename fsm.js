@@ -8,6 +8,7 @@
 
   function FSM(config) {
     const events = {};
+    let transitionQueue = Promise.resolve();
 
     // TODO: validate params, eg can't have dead end states, or need some exit func
     const fsm = {
@@ -31,43 +32,48 @@
     const getCbs = (key) => events[key] || [];
 
     fsm.go = function(next = null) {
-      const prev = fsm.current;
-      const params = Array.prototype.slice.call(arguments, 1);
+      // Queue this transition to run after any in-progress transitions
+      transitionQueue = transitionQueue.then(() => {
+        const prev = fsm.current;
+        const params = Array.prototype.slice.call(arguments, 1);
 
-      // Default to first next state for current, so can just call `.go()`
-      // TODO: file issue
-      if (next === null) {
-        next = fsm.transitions[prev][0];
-      }
+        // Default to first next state for current, so can just call `.go()`
+        // TODO: file issue
+        if (next === null) {
+          next = fsm.transitions[prev][0];
+        }
 
-      if (fsm.transitions[prev].indexOf(next) < 0)
-        return Promise.reject(new ITE(prev, next));
+        if (fsm.transitions[prev].indexOf(next) < 0)
+          return Promise.reject(new ITE(prev, next));
 
-      const after = getCbs('after:' + prev);
-      const pre = getCbs('before:' + next);
-      const on = getCbs(next);
-      const post = getCbs('*');
+        const after = getCbs('after:' + prev);
+        const pre = getCbs('before:' + next);
+        const on = getCbs(next);
+        const post = getCbs('*');
 
-      const beforePost = after.concat(pre, on);
+        const beforePost = after.concat(pre, on);
 
-      const getPrefix = (index) => {
-        return (index < after.length ? [next] : index < beforePost.length ? [prev] : [prev, next]);
-      };
+        const getPrefix = (index) => {
+          return (index < after.length ? [next] : index < beforePost.length ? [prev] : [prev, next]);
+        };
 
-      const stateChange = after.length + pre.length;
+        const stateChange = after.length + pre.length;
 
-      return beforePost
-        .concat(post, function ensureStateChange() {})
-        .reduce(function(series, task, index) {
-          const args = getPrefix(index).concat(params);
-          return series.then(function() {
-            if (index === stateChange) {
-              fsm.current = next;
-            }
+        return beforePost
+          .concat(post, function ensureStateChange() {})
+          .reduce(function(series, task, index) {
+            const args = getPrefix(index).concat(params);
+            return series.then(function() {
+              if (index === stateChange) {
+                fsm.current = next;
+              }
 
-            return task.apply(task, args);
-          });
-        }, Promise.resolve());
+              return task.apply(task, args);
+            });
+          }, Promise.resolve());
+      });
+
+      return transitionQueue;
     }
 
     return fsm;
